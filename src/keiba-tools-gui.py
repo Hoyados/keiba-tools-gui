@@ -10,7 +10,66 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.font_manager as fm
 import matplotlib.colors as mcolors
-plt.rcParams["font.family"] = "Hiragino Sans"
+import urllib.request
+
+# 日本語フォントがない環境（Streamlit Cloud 等）でも表示できるようにフォールバック設定
+plt.rcParams["font.family"] = [
+    "Noto Sans JP",
+    "Hiragino Sans",
+    "Hiragino Kaku Gothic Pro",
+    "Yu Gothic",
+    "Meiryo",
+    "IPAGothic",
+    "DejaVu Sans",
+]
+plt.rcParams['axes.unicode_minus'] = False
+
+_FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
+_FONT_PATH = os.path.join(_FONT_DIR, "NotoSansJP-Regular.otf")
+_FONT_URL = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansJP-Regular.otf"
+
+def ensure_noto_sans_jp_available(use_streamlit_cache: bool = False):
+    """
+    Noto Sans JP をダウンロードして Matplotlib に登録する。
+    既に利用可能なら何もしない。Streamlit 環境ではキャッシュ可能。
+    """
+    def _do_install():
+        try:
+            # 既存のフォント探索
+            for f in fm.fontManager.ttflist:
+                name = getattr(f, 'name', '') or ''
+                if 'Noto Sans JP' in name or 'NotoSansJP' in name:
+                    plt.rcParams["font.family"] = ["Noto Sans JP", "DejaVu Sans"]
+                    return True
+        except Exception:
+            pass
+
+        try:
+            os.makedirs(_FONT_DIR, exist_ok=True)
+            if not os.path.exists(_FONT_PATH):
+                with urllib.request.urlopen(_FONT_URL, timeout=30) as r:
+                    data = r.read()
+                with open(_FONT_PATH, "wb") as w:
+                    w.write(data)
+            fm.fontManager.addfont(_FONT_PATH)
+            try:
+                fm._rebuild()  # 一部バージョンで必要
+            except Exception:
+                pass
+            plt.rcParams["font.family"] = ["Noto Sans JP", "DejaVu Sans"]
+            return True
+        except Exception as e:
+            logger.warning(f"Noto Sans JP の準備に失敗しました: {e}")
+            return False
+
+    if use_streamlit_cache:
+        try:
+            import streamlit as st
+            return st.cache_resource(show_spinner=False)(_do_install)()
+        except Exception:
+            return _do_install()
+    else:
+        return _do_install()
 
 # 必須列（前処理に必要）
 REQUIRED_COLUMNS = [
@@ -294,7 +353,19 @@ def run_streamlit_app():
         raise SystemExit("Streamlit がインストールされていません。`pip install streamlit` を実行してください。")
 
     st.set_page_config(page_title="競馬ツール GUI", layout="wide")
+    # UI 全体も Noto Sans JP を利用（Matplotlib には影響しませんが UI の統一感向上）
+    st.markdown(
+        "<link href='https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap' rel='stylesheet'>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<style>html, body, [class*='css'] { font-family: 'Noto Sans JP', sans-serif !important; }</style>",
+        unsafe_allow_html=True,
+    )
     st.title("競馬結果分析ツール (Streamlit)")
+
+    # 日本語フォントの用意（クラウド環境向け）
+    ensure_noto_sans_jp_available(use_streamlit_cache=True)
 
     st.sidebar.header("CSV 読み込み")
     uploaded = st.sidebar.file_uploader("CSVファイルを選択", type=["csv"])
@@ -417,6 +488,8 @@ def main_cli(filename: str = "競馬-結果リスト"):
     df = cleandata(df)
     df = add_feature(df)
     _ensure_output_dir()
+    # CLI 実行時も可能ならフォントを用意
+    ensure_noto_sans_jp_available(use_streamlit_cache=False)
     df.to_csv("output/cleaned-keibadata.csv", index = False)
 
     # 全データの集計
