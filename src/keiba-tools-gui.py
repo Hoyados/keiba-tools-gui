@@ -346,6 +346,40 @@ def fig_heatmap(pivot_df: pd.DataFrame, title: str = "", vmin=None, vmax=None):
     plt.tight_layout()
     return fig
 
+# Plotly 版（Streamlit ではこちらを利用）
+def fig_bar_plotly(series: pd.Series, title: str = ""):
+    import plotly.express as px
+    s = series.sort_index()
+    fig = px.bar(x=s.index.astype(str), y=s.values, title=title, labels={"x": s.index.name or "", "y": "値"})
+    fig.update_layout(template="plotly_white", font=dict(family="Noto Sans JP"))
+    return fig
+
+def fig_line_plotly(series: pd.Series, title: str = ""):
+    import plotly.express as px
+    s = series.sort_index()
+    fig = px.line(x=s.index.astype(str), y=s.values, title=title, markers=True, labels={"x": s.index.name or "", "y": "値"})
+    fig.update_layout(template="plotly_white", font=dict(family="Noto Sans JP"))
+    return fig
+
+def fig_heatmap_plotly(pivot_df: pd.DataFrame, title: str = "", vmin=None, vmax=None):
+    import plotly.express as px
+    # x は列、y は行
+    x = pivot_df.columns.astype(str)
+    y = pivot_df.index.astype(str)
+    fig = px.imshow(
+        pivot_df.values,
+        x=x,
+        y=y,
+        color_continuous_scale="RdBu",
+        zmin=vmin,
+        zmax=vmax,
+        text_auto=True,
+        aspect="auto",
+        title=title,
+    )
+    fig.update_layout(template="plotly_white", font=dict(family="Noto Sans JP"))
+    return fig
+
 def run_streamlit_app():
     try:
         import streamlit as st
@@ -457,31 +491,37 @@ def run_streamlit_app():
             vmin, vmax = None, None
             if metric_key.endswith("%)"):
                 vmin, vmax = 0, 100
-            fig = fig_heatmap(pv, title=title, vmin=vmin, vmax=vmax)
+            fig = fig_heatmap_plotly(pv, title=title, vmin=vmin, vmax=vmax)
         else:
             s = aggregate_series(df, group_col=x_col, metric_key=metric_key)
             title = f"{x_col} ごとの {metric_key}"
             if graph_type == "棒グラフ":
-                fig = fig_bar(s, title=title)
+                fig = fig_bar_plotly(s, title=title)
             else:
-                fig = fig_line(s, title=title)
+                fig = fig_line_plotly(s, title=title)
     except Exception as e:
         st.error(f"グラフ作成時にエラーが発生しました: {e}")
         return
 
     if fig is not None:
-        st.pyplot(fig, use_container_width=True)
-        # ダウンロードボタン
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=200, bbox_inches="tight")
-        buf.seek(0)
+        st.plotly_chart(fig, use_container_width=True)
+        # ダウンロードボタン（Plotly → PNG）。kaleido が必要。
+        import plotly.io as pio
+        buf = None
+        try:
+            png_bytes = pio.to_image(fig, format="png", scale=2)
+            buf = io.BytesIO(png_bytes)
+        except Exception as e:
+            st.info("PNG 書き出しに必要な 'kaleido' が未インストールです。requirements に 'kaleido' を追加してください。")
+            buf = None
         default_name = f"{x_col}{'x' + y_col if two_dim else ''}_{metric_key}.png".replace("/", "-")
-        st.download_button(
-            label="グラフを保存 (PNG)",
-            data=buf,
-            file_name=default_name,
-            mime="image/png",
-        )
+        if buf is not None:
+            st.download_button(
+                label="グラフを保存 (PNG)",
+                data=buf,
+                file_name=default_name,
+                mime="image/png",
+            )
 
 def main_cli(filename: str = "競馬-結果リスト"):
     df = fileload(filename)
