@@ -4,4 +4,3 @@ matplotlib
 seaborn
 streamlit
 plotly
-kaleido

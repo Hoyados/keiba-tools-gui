@@ -504,7 +504,17 @@ def run_streamlit_app():
         return
 
     if fig is not None:
-        st.plotly_chart(fig, use_container_width=True)
+        # Plotly のカメラ（画像保存）ボタンを有効化
+        default_name = f"{x_col}{'x' + y_col if two_dim else ''}_{metric_key}".replace("/", "-")
+        config = {
+            "displaylogo": False,
+            "toImageButtonOptions": {
+                "format": "png",     # png / svg / jpeg
+                "filename": default_name,
+                "scale": 2            # 解像度倍率
+            },
+        }
+        st.plotly_chart(fig, use_container_width=True, config=config)
 
 def main_cli(filename: str = "競馬-結果リスト"):
     df = fileload(filename)
