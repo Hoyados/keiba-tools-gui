@@ -504,41 +504,39 @@ def run_streamlit_app():
         return
 
     if fig is not None:
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-    import plotly.io as pio
-    import io, importlib.util, traceback
+        import plotly.io as pio
+        import io, importlib.util, traceback
 
-    # kaleido の見つかり方を可視化（名前衝突や未導入を判定）
-    spec = importlib.util.find_spec("kaleido")
-    if not spec:
-        st.info("PNG 書き出しには 'kaleido' が必要です。requirements.txt に 'kaleido' を追加して再デプロイしてください。")
-        buf = None
-    else:
-        # ここで実パスも確認できると安心（必要なら表示）
-        # st.sidebar.write("kaleido at:", spec.origin)
+        buf = None  # 先に初期化しておく
 
-        try:
-            # 明示的に engine='kaleido' を指定
-            png_bytes = pio.to_image(fig, format="png", scale=2, engine="kaleido")
-            buf = io.BytesIO(png_bytes)
-        except ModuleNotFoundError as e:
+        # kaleido の見つかり方を可視化（名前衝突や未導入を判定）
+        spec = importlib.util.find_spec("kaleido")
+        if not spec:
             st.info("PNG 書き出しには 'kaleido' が必要です。requirements.txt に 'kaleido' を追加して再デプロイしてください。")
-            buf = None
-        except Exception as e:
-            # kaleido 以外の原因（フォント/互換/権限など）は内容を表示
-            st.warning("PNG 書き出しに失敗しました（kaleido 以外の要因の可能性があります）。")
-            st.exception(e)  # 具体的なエラー内容を表示
-            buf = None
+        else:
+            # ここで実パスも確認できると安心（必要なら表示）
+            # st.sidebar.write("kaleido at:", spec.origin)
+            try:
+                # 明示的に engine='kaleido' を指定
+                png_bytes = pio.to_image(fig, format="png", scale=2, engine="kaleido")
+                buf = io.BytesIO(png_bytes)
+            except ModuleNotFoundError:
+                st.info("PNG 書き出しには 'kaleido' が必要です。requirements.txt に 'kaleido' を追加して再デプロイしてください。")
+            except Exception as e:
+                # kaleido 以外の原因（フォント/互換/権限など）は内容を表示
+                st.warning("PNG 書き出しに失敗しました（kaleido 以外の要因の可能性があります）。")
+                st.exception(e)  # 具体的なエラー内容を表示
 
-    default_name = f"{x_col}{'x' + y_col if two_dim else ''}_{metric_key}.png".replace("/", "-")
-    if buf is not None:
-        st.download_button(
-            label="グラフを保存 (PNG)",
-            data=buf,
-            file_name=default_name,
-            mime="image/png",
-        )
+        default_name = f"{x_col}{'x' + y_col if two_dim else ''}_{metric_key}.png".replace("/", "-")
+        if buf is not None:
+            st.download_button(
+                label="グラフを保存 (PNG)",
+                data=buf,
+                file_name=default_name,
+                mime="image/png",
+            )
 
 def main_cli(filename: str = "競馬-結果リスト"):
     df = fileload(filename)
